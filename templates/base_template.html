@@ -1,0 +1,208 @@
+{% extends "admin/base_site.html" %}
+
+{# Attention! may break when Django CMS updates #}
+{# If this happens, replace with a fresh copy of #}
+{# /site-packages/cms/templates/admin/cms/page/plugin_change_form.html #}
+{# keeping blocks marked as customized #}
+
+{% load i18n admin_modify adminmedia cms_admin %}
+
+{% block extrahead %}{{ block.super }}
+    <script type="text/javascript" src="{% admin_media_prefix %}js/jquery.min.js"></script>
+    <script type="text/javascript" src="{% url admin:jsi18n %}"></script>
+    {{ media }}
+
+    <script type="text/javascript">
+        //<![CDATA[
+        (function($) {
+            function runOnLoad(f) {
+                if (runOnLoad.loaded){
+                    f();
+                }else{
+                    runOnLoad.funcs.push(f);
+                }
+            }
+            runOnLoad.funcs = [];
+            runOnLoad.loaded = false;
+            runOnLoad.run = function() {
+                if (runOnLoad.loaded) return;
+
+                for(var i = 0; i < runOnLoad.funcs.length; i++) {
+                    try {
+                        runOnLoad.funcs[i]();
+                    }catch(e) { }
+                }
+                runOnLoad.loaded = true;
+                delete runOnLoad.funcs;
+                delete runOnLoad.run;
+            };
+            if (window.addEventListener){
+                window.addEventListener("load", runOnLoad.run, false);
+            }else if (window.attachEvent){
+                window.attachEvent("onload", runOnLoad.run);
+            }else{
+                window.onload = runOnLoad.run;
+            }
+            runOnLoad(function(){
+                parent.setiframeheight($('body').height()+20, {{ plugin.pk }});
+            });
+            $(document).ready(function(){
+                $("a.add-another,a.related-lookup").each(function(i, sign){
+                    var href = $(sign).attr("href")
+                    if (href.substr(0,2) == ".."){
+                        href = "../../"+href
+                        $(sign).attr("href", href);
+                    }
+                });
+            });
+        })(jQuery);
+        //]]>
+    </script>
+
+
+{% endblock %}
+
+{% block extrastyle %}<link rel="stylesheet" type="text/css" href="{% admin_media_prefix %}css/forms.css" />{% endblock %}
+
+{% block coltype %}{% if ordered_objects %}colMS{% else %}colM{% endif %}{% endblock %}
+
+{% block bodyclass %}{{ opts.app_label }}-{{ opts.object_name.lower }} change-form{% endblock %}
+
+{% block breadcrumbs %}{% if not is_popup %}
+    <div class="breadcrumbs">
+        <a href="../../../">{% trans "Home" %}</a> &rsaquo;
+        <a href="../../">{{ app_label|capfirst|escape }}</a> &rsaquo;
+        {% if has_change_permission %}<a href="../">{{ opts.verbose_name_plural|capfirst }}</a>{% else %}{{ opts.verbose_name_plural|capfirst }}{% endif %} &rsaquo;
+        {% if add %}{% trans "Add" %} {{ opts.verbose_name }}{% else %}{{ original|truncatewords:"18" }}{% endif %}
+    </div>
+{% endif %}{% endblock %}
+
+{% block content_title %}<h2>{{ plugin.get_plugin_name }}</h2>{% endblock %}
+
+{% block content %}<div id="content-main">
+    {# customized #}
+    {% block top %}{% if preview %}
+        <style>
+            {% include "markdown.css" %}
+        </style>
+        <script>
+            $(function() {
+                $("#id_content").addClass("wmd-input");
+                $('#id_content').before('<div id="wmd-button-bar"></div>');
+            });
+        </script>
+
+        <script>
+            {% include "Markdown.Converter.js" %}
+        </script>
+        <script>
+            {% include "Markdown.Sanitizer.js" %}
+        </script>
+        <script>
+            {% include "Markdown.Editor.js" %}
+        </script>
+
+        <div style="margin-bottom: 5px; margin-top: 5px;">
+            <div>
+                <div style="float: left;">
+                    <a href="#" id="markdown_preview_hide">Hide preview</a>
+                    <a href="#" id="markdown_preview_show" style="display: none;">Show preview</a>
+                    <span><i>Press [Save] to keep your changes!</i></span>
+                </div>
+                <div style="float: right;">
+                    <select id="history_select">
+                        <option value="-">Chose previously saved version</option>
+    
+                    </select>
+                    <button id="history_load">Load</button>
+                </div>
+            </div>
+            <div style="clear: both;"></div>
+            <div style="border: 1px solid #cccccc; padding: 10px; margin-top: 5px; " id="markdown_preview">
+{#            {% render_plugin plugin %}#}
+                <div id="wmd-preview" class="wmd_preview"></div>
+            </div>
+        </div>
+        <script type="text/javascript">
+            $(function() {
+                var converter1 = Markdown.getSanitizingConverter();
+                var editor1 = new Markdown.Editor(converter1);
+                editor1.run();
+
+                $("#markdown_preview_hide").click(function() {
+                    $("#markdown_preview").hide();
+                    $("#markdown_preview_hide").hide();
+                    $("#markdown_preview_show").show();
+                });
+                $("#markdown_preview_show").click(function() {
+                    $("#markdown_preview").show();
+                    $("#markdown_preview_hide").show();
+                    $("#markdown_preview_show").hide();
+                });
+                {% autoescape off %}
+                    {% if history %}
+                        var history_data = {{ history }};
+                    {% else %}
+                        var history_data = [];
+                    {% endif %}
+                {% endautoescape %}
+                for (var v in history_data) {
+                    $("#history_select").append(
+                        '<option value="' + v + '">' + history_data[v].date + '</option>'
+                    );
+                }
+                $("#history_load").click(function() {
+                    var index = $("#history_select :selected").val();
+
+                    if (index != '-') {
+                        $("#id_content").val($("<div/>").html(history_data[index].content).text());
+                        $("#id_css").val($("<div/>").html(history_data[index].css).text());
+                        editor1.refreshPreview();
+                    }
+                });
+            })
+        </script>
+    {% endif %}{% endblock %}
+    {# endcustomized #}
+    <form {% if has_file_field %}enctype="multipart/form-data" {% endif %}action="{{ form_url }}" method="post" id="{{ opts.module_name }}_form">{% csrf_token %}{% block form_top %}{% endblock %}
+        <div>
+            {% if is_popup %}<input type="hidden" name="_popup" value="1" />{% endif %}
+            {% if save_on_top %}{% submit_row %}{% endif %}
+            {% if errors %}
+                <p class="errornote">
+                    {% blocktrans count errors|length as counter %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktrans %}
+                </p>
+                <ul class="errorlist">{% for error in adminform.form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+            {% endif %}
+
+            {% block fieldsets %}
+                {% for fieldset in adminform %}
+                    {% include "admin/includes/fieldset.html" %}
+                {% endfor %}
+            {% endblock %}
+
+            {% block after_field_sets %}{% endblock %}
+
+            {% for inline_admin_formset in inline_admin_formsets %}
+                {% include inline_admin_formset.opts.template %}
+            {% endfor %}
+
+            {% block after_related_objects %}{% endblock %}
+
+
+            {% if add %}
+                <script type="text/javascript">document.getElementById("{{ adminform.first_field.auto_id }}").focus();</script>
+            {% endif %}
+
+            {# JavaScript for prepopulated fields #}
+            {% prepopulated_fields_js %}
+
+        </div>
+<span class="plugin-submit-row"{% if is_popup %} style="overflow: auto;"{% endif %}>
+	<input type="submit" name="_save" class="default" value="{% trans "Save" %}" {{ onclick_attrib }}/>
+	<input type="submit" style="margin-left: 8px;" value="{% trans "Cancel" %}" name="_cancel">
+</span>
+    </form>
+
+    </div>
+{% endblock %}
